@@ -1,117 +1,90 @@
 require('dotenv').config();
-const { Client, GatewayIntentBits, EmbedBuilder, ButtonBuilder, ButtonStyle, ActionRowBuilder } = require('discord.js');
+const { Client, GatewayIntentBits, Partials, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, Events } = require('discord.js');
 const ms = require('ms');
 
 const client = new Client({
-  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent]
+  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent],
+  partials: [Partials.Message, Partials.Channel, Partials.Reaction]
 });
 
-const TOKEN = process.env.TOKEN;
-if (!TOKEN) {
-  console.error('❌ Missing TOKEN in .env');
-  process.exit(1);
-}
-
-const activeGiveaways = new Map();
-
-client.on('ready', () => {
-  console.log(`✅ Logged in as ${client.user.tag}`);
+client.once(Events.ClientReady, () => {
+  console.log(`✅ تم تسجيل الدخول كبوت: ${client.user.tag}`);
 });
 
 client.on('messageCreate', async message => {
-  if (!message.content.startsWith('#giv') || message.author.bot) return;
+  if (message.author.bot || !message.content.startsWith('#giv')) return;
 
-  const content = message.content.slice(5).trim();
-  const parts = content.split('!');
-  if (parts.length < 2) return message.reply('❌ Wrong format. Use: `#giv <title> <winners>w !<time>`');
+  const args = message.content.slice(5).trim().split('!');
+  if (args.length < 2) return message.reply('❌ الصيغة غير صحيحة. مثال: `#giv جيف اوي 50 الف كردت) 1w ! 1d`');
 
-  const [titleAndWinners, timeStr] = parts;
-  const time = ms(timeStr.trim());
-  if (!time) return message.reply('❌ Invalid time format. Use something like `1d`, `5m`, etc.');
+  const content = args[0].split(')');
+  const title = content[0].trim(); // الجائزة
+  const winnersPart = content[1].trim(); // عدد الفائزين
+  const timePart = args[1].trim(); // الوقت
 
-  const titleParts = titleAndWinners.trim().split(' ');
-  const lastPart = titleParts.pop();
-  const winners = parseInt(lastPart.toLowerCase().replace('w', ''));
-  const title = titleParts.join(' ');
-  if (isNaN(winners) || winners < 1) return message.reply('❌ Invalid winners count. Use like `2w`');
+  const duration = ms(timePart);
+  if (!duration || isNaN(parseInt(winnersPart))) return message.reply('❌ تأكد من كتابة عدد الفائزين والوقت بشكل صحيح.');
 
-  await message.delete();
-
-  const endTime = Date.now() + time;
+  const endsAt = Date.now() + duration;
 
   const embed = new EmbedBuilder()
-    .setTitle(title)
-    .setDescription(`🕒 Ends in: <t:${Math.floor(endTime / 1000)}:R>\n👤 Started by: <@${message.author.id}>\n🏆 Winners: **${winners}**`)
-    .setColor('Blue')
-    .setFooter({ text: `Giveaway ends at` })
-    .setTimestamp(endTime);
+    .setColor('#FFD700')
+    .setTitle(`🎁 ${title}`)
+    .setDescription(`⏳ **ينتهي بعد:** <t:${Math.floor(endsAt / 1000)}:R>\n👑 **تم البدء بواسطة:** ${message.author}\n🎉 **عدد الفائزين:** ${winnersPart}`)
+    .setFooter({ text: `ID: ${message.author.id}` })
+    .setTimestamp();
 
-  const row = new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId('enter_giveaway')
-      .setLabel('🎉 Join Giveaway')
-      .setStyle(ButtonStyle.Primary)
-  );
+  const button = new ButtonBuilder()
+    .setCustomId('join_giveaway')
+    .setLabel('🎉 شارك في السحب')
+    .setStyle(ButtonStyle.Primary);
 
-  const sent = await message.channel.send({ embeds: [embed], components: [row] });
+  const row = new ActionRowBuilder().addComponents(button);
+
+  const giveawayMessage = await message.channel.send({
+    embeds: [embed],
+    components: [row]
+  });
+
+  await message.delete(); // حذف رسالة الأمر
 
   const participants = new Set();
 
-  activeGiveaways.set(sent.id, {
-    messageId: sent.id,
-    channelId: sent.channel.id,
-    guildId: sent.guild.id,
-    startedBy: message.author.id,
-    prize: title,
-    winners,
-    endsAt: endTime,
-    participants
+  const collector = giveawayMessage.createMessageComponentCollector({ time: duration });
+
+  collector.on('collect', async i => {
+    if (i.customId === 'join_giveaway') {
+      participants.add(i.user.id);
+      await i.reply({ content: '✅ تم تسجيل مشاركتك في السحب!', ephemeral: true });
+    }
   });
 
-  setTimeout(async () => {
-    const giveaway = activeGiveaways.get(sent.id);
-    if (!giveaway) return;
-
-    const all = Array.from(giveaway.participants);
-    if (all.length === 0) {
-      await sent.reply(`😢 No one joined the giveaway for **${title}**.`);
-      activeGiveaways.delete(sent.id);
-      return;
+  collector.on('end', async () => {
+    const ids = [...participants];
+    if (ids.length === 0) {
+      return message.channel.send('😢 لم يشارك أحد في السحب.');
     }
 
-    const selected = [];
-    while (selected.length < winners && all.length > 0) {
-      const index = Math.floor(Math.random() * all.length);
-      selected.push(all.splice(index, 1)[0]);
+    const winnersCount = Math.min(parseInt(winnersPart), ids.length);
+    const winners = [];
+
+    while (winners.length < winnersCount) {
+      const winnerId = ids.splice(Math.floor(Math.random() * ids.length), 1)[0];
+      winners.push(`<@${winnerId}>`);
     }
 
-    const channel = await client.channels.fetch(giveaway.channelId);
-    await channel.send({
-      content: `🎉 Congratulations ${selected.map(u => `<@${u}>`).join(', ')}! You won **${giveaway.prize}**!\nStarted by: <@${giveaway.startedBy}>`
-    });
+    await message.channel.send(`🎉 مبروك ${winners.join(', ')}! لقد فزتم بـ **${title}**!\n📩 تم إرسال رسالة خاصة لكل فائز.`);
 
-    for (const userId of selected) {
+    // إرسال رسالة خاصة
+    winners.forEach(async winner => {
       try {
-        const user = await client.users.fetch(userId);
-        await user.send(`🎊 Congratulations! You won **${giveaway.prize}** in the server: ${channel.guild.name}!\nCheck the channel: <#${giveaway.channelId}>`);
+        const user = await client.users.fetch(winner.replace(/[<@>]/g, ''));
+        user.send(`🎉 مبروك! لقد فزت بـ **${title}** في السيرفر **${message.guild.name}**!\nالروم: <#${message.channel.id}>`);
       } catch (e) {
-        console.warn(`⚠️ Couldn't DM ${userId}`);
+        console.error(`❌ فشل إرسال رسالة لـ ${winner}:`, e);
       }
-    }
-
-    activeGiveaways.delete(sent.id);
-  }, time);
+    });
+  });
 });
 
-client.on('interactionCreate', async interaction => {
-  if (!interaction.isButton()) return;
-  if (interaction.customId !== 'enter_giveaway') return;
-
-  const giveaway = activeGiveaways.get(interaction.message.id);
-  if (!giveaway) return interaction.reply({ content: '❌ Giveaway has ended or invalid.', ephemeral: true });
-
-  giveaway.participants.add(interaction.user.id);
-  await interaction.reply({ content: '✅ You have joined the giveaway!', ephemeral: true });
-});
-
-client.login(TOKEN);
+client.login(process.env.TOKEN);
