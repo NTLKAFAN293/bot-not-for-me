@@ -1,129 +1,130 @@
-// index.js
-const { Client, GatewayIntentBits, Partials, EmbedBuilder, ButtonBuilder, ActionRowBuilder, ButtonStyle, InteractionType } = require("discord.js");
-const ms = require("ms");
-require("dotenv").config();
+require('dotenv').config();
+const { Client, GatewayIntentBits, Partials, EmbedBuilder, ButtonBuilder, ActionRowBuilder, ButtonStyle, SlashCommandBuilder, Collection } = require('discord.js');
+const ms = require('ms');
 
 const client = new Client({
-  intents: [
-    GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent,
-    GatewayIntentBits.GuildMembers,
-    GatewayIntentBits.GuildMessageReactions,
-  ],
-  partials: [Partials.Message, Partials.Channel, Partials.Reaction],
+    intents: [
+        GatewayIntentBits.Guilds,
+        GatewayIntentBits.GuildMessages,
+        GatewayIntentBits.MessageContent,
+        GatewayIntentBits.GuildMembers
+    ],
+    partials: [Partials.Message, Partials.Channel, Partials.Reaction]
 });
 
-let logChannelId = null; // سيتغير بواسطة /setlog
-
-client.once("ready", () => {
-  console.log(`✅ تم تسجيل الدخول كبوت: ${client.user.tag}`);
+client.once('clientReady', () => {
+    console.log(`✅ تم تسجيل الدخول كبوت: ${client.user.tag}`);
 });
 
-client.on("interactionCreate", async (interaction) => {
-  if (!interaction.isChatInputCommand()) return;
+// ================== Giveaway ==================
+client.commands = new Collection();
 
-  if (interaction.commandName === "setlog") {
-    logChannelId = interaction.options.getChannel("channel").id;
-    await interaction.reply({ content: `📡 تم تحديد روم اللوق!`, ephemeral: true });
-  }
-});
+client.commands.set('giveaway', new SlashCommandBuilder()
+    .setName('giveaway')
+    .setDescription('ابدأ Giveaway جديد')
+    .addStringOption(option => option.setName('الوصف').setDescription('وصف الجيف أواي').setRequired(true))
+    .addStringOption(option => option.setName('الوقت').setDescription('مدة السحب 1d/1h/1m').setRequired(true))
+    .addIntegerOption(option => option.setName('عدد_الفائزين').setDescription('عدد الفائزين').setRequired(true))
+);
 
-// Listen for #giv messages
-client.on("messageCreate", async (message) => {
-  if (!message.content.startsWith("#giv")) return;
-  if (message.author.bot) return;
+// ================== Logs Channel ==================
+let logChannelId;
 
-  const args = message.content.slice(4).trim().split(" ");
-  const prize = args.slice(0, args.length - 2).join(" ");
-  const winnersCount = parseInt(args[args.length - 2].replace("w", ""));
-  const time = args[args.length - 1].replace("!", "");
+client.on('interactionCreate', async interaction => {
+    if (!interaction.isChatInputCommand()) return;
 
-  const giveawayEmbed = new EmbedBuilder()
-    .setTitle(prize)
-    .setDescription(`ينتهي بعد: ${time}\nتم البدء بواسطة: ${message.author}\nعدد الفائزين: ${winnersCount}`)
-    .setColor("Purple")
-    .setTimestamp();
-
-  const participateButton = new ButtonBuilder()
-    .setCustomId("participate")
-    .setLabel("شارك في الجيف اواي")
-    .setStyle(ButtonStyle.Primary);
-
-  const row = new ActionRowBuilder().addComponents(participateButton);
-
-  const giveawayMessage = await message.channel.send({ embeds: [giveawayEmbed], components: [row] });
-  await message.delete();
-
-  const participants = new Set();
-
-  const filter = (i) => i.customId === "participate";
-  const collector = giveawayMessage.createMessageComponentCollector({ filter, time: ms(time) });
-
-  collector.on("collect", (i) => {
-    participants.add(i.user.id);
-    i.reply({ content: "تم تسجيلك للمشاركة!", ephemeral: true });
-  });
-
-  collector.on("end", async () => {
-    const allParticipants = Array.from(participants);
-    if (allParticipants.length === 0) return;
-
-    const winners = [];
-    for (let i = 0; i < winnersCount; i++) {
-      if (allParticipants.length === 0) break;
-      const winner = allParticipants.splice(Math.floor(Math.random() * allParticipants.length), 1)[0];
-      winners.push(winner);
+    if (interaction.commandName === 'setlog') {
+        logChannelId = interaction.options.getChannel('الروم').id;
+        await interaction.reply({ content: '📡 تم تحديد روم اللوق!', ephemeral: true });
     }
 
-    const winnersMentions = winners.map((id) => `<@${id}>`).join(", ");
+    if (interaction.commandName === 'giveaway') {
+        const الوصف = interaction.options.getString('الوصف');
+        const الوقت = interaction.options.getString('الوقت');
+        const عدد = interaction.options.getInteger('عدد_الفائزين');
 
-    const endEmbed = new EmbedBuilder()
-      .setTitle("انتهى الجيف اواي!")
-      .setDescription(`الفائزين: ${winnersMentions}`)
-      .setColor("Green")
-      .setTimestamp();
+        const embed = new EmbedBuilder()
+            .setTitle(الوصف)
+            .setDescription(`ينتهي بعد: ${الوقت}\nتم البدء بواسطة: ${interaction.user}\nعدد الفائزين: ${عدد}`)
+            .setColor('Blue')
+            .setFooter({ text: 'اضغط على الزر للمشاركة' });
 
-    await giveawayMessage.edit({ embeds: [endEmbed], components: [] });
+        const button = new ButtonBuilder()
+            .setCustomId('join_giveaway')
+            .setLabel('شارك')
+            .setStyle(ButtonStyle.Primary);
 
-    for (const winnerId of winners) {
-      const winnerUser = await client.users.fetch(winnerId);
-      winnerUser.send(`🎉 مبروك لقد فزت بـ **${prize}** في السيرفر **${message.guild.name}**!`);
+        const row = new ActionRowBuilder().addComponents(button);
+
+        const msg = await interaction.reply({ embeds: [embed], components: [row], fetchReply: true });
+
+        const collector = msg.createMessageComponentCollector({ time: ms(الوقت) });
+        const participants = new Set();
+
+        collector.on('collect', i => {
+            participants.add(i.user.id);
+            i.reply({ content: '✅ تم تسجيلك في السحب!', ephemeral: true });
+        });
+
+        collector.on('end', async () => {
+            const winners = Array.from(participants).sort(() => 0.5 - Math.random()).slice(0, عدد);
+            winners.forEach(async userId => {
+                const user = await client.users.fetch(userId);
+                interaction.channel.send(`🎉 مبروك ${user}! لقد فزت بالـ Giveaway!`);
+                user.send(`مبروك لقد فزت بالـ Giveaway في السيرفر: ${interaction.guild.name}`);
+            });
+        });
     }
-  });
 });
 
-// Message Delete & Edit Logs
-client.on("messageDelete", async (msg) => {
-  if (!logChannelId) return;
-  const channel = await client.channels.fetch(logChannelId);
-  const embed = new EmbedBuilder()
-    .setTitle("🗑️ تم حذف رسالة")
-    .addFields(
-      { name: "الرسالة", value: msg.content || "لا توجد محتوى" },
-      { name: "المرسل", value: `${msg.author}` },
-      { name: "الروم", value: `${msg.channel}` },
-    )
-    .setColor("Red")
-    .setTimestamp();
-  channel.send({ embeds: [embed] });
+// ================== Message Delete Log ==================
+client.on('messageDelete', async message => {
+    if (!logChannelId) return;
+    const embed = new EmbedBuilder()
+        .setTitle('🗑️ تم حذف رسالة')
+        .addFields(
+            { name: 'من', value: message.author?.tag || 'مجهول', inline: true },
+            { name: 'المحتوى', value: message.content || 'لا يوجد نص', inline: false },
+            { name: 'الروم', value: message.channel.name, inline: true },
+            { name: 'الوقت', value: new Date().toLocaleString(), inline: true }
+        )
+        .setColor('Red');
+    client.channels.cache.get(logChannelId)?.send({ embeds: [embed] });
 });
 
-client.on("messageUpdate", async (oldMsg, newMsg) => {
-  if (!logChannelId) return;
-  const channel = await client.channels.fetch(logChannelId);
-  const embed = new EmbedBuilder()
-    .setTitle("✏️ تم تعديل رسالة")
-    .addFields(
-      { name: "الرسالة القديمة", value: oldMsg.content || "لا توجد محتوى" },
-      { name: "الرسالة الجديدة", value: newMsg.content || "لا توجد محتوى" },
-      { name: "المرسل", value: `${oldMsg.author}` },
-      { name: "الروم", value: `${oldMsg.channel}` },
-    )
-    .setColor("Orange")
-    .setTimestamp();
-  channel.send({ embeds: [embed] });
+// ================== Member Ban/Timeout Log ==================
+client.on('guildMemberUpdate', async (oldMember, newMember) => {
+    if (!logChannelId) return;
+    // تحقق من التايم آوت
+    if (oldMember.communicationDisabledUntil !== newMember.communicationDisabledUntil) {
+        const embed = new EmbedBuilder()
+            .setTitle('⏱️ تم إعطاء تايم آوت')
+            .setDescription(`${newMember.user.tag} تم وضعه في تايم آوت`)
+            .addFields({ name: 'المدة', value: newMember.communicationDisabledUntil ? newMember.communicationDisabledUntil.toLocaleString() : 'تم رفع التايم آوت', inline: true })
+            .setColor('Orange');
+        client.channels.cache.get(logChannelId)?.send({ embeds: [embed] });
+    }
 });
 
-// Bot Token
+client.on('guildBanAdd', async (guild, user) => {
+    if (!logChannelId) return;
+    const embed = new EmbedBuilder()
+        .setTitle('⛔ تم حظر عضو')
+        .setDescription(`${user.tag} تم حظره من السيرفر`)
+        .setColor('DarkRed')
+        .setTimestamp();
+    client.channels.cache.get(logChannelId)?.send({ embeds: [embed] });
+});
+
+client.on('guildBanRemove', async (guild, user) => {
+    if (!logChannelId) return;
+    const embed = new EmbedBuilder()
+        .setTitle('✅ تم رفع الحظر')
+        .setDescription(`${user.tag} تم رفع الحظر عنه`)
+        .setColor('Green')
+        .setTimestamp();
+    client.channels.cache.get(logChannelId)?.send({ embeds: [embed] });
+});
+
+// تسجيل دخول باستخدام .env
 client.login(process.env.TOKEN);
