@@ -1,13 +1,17 @@
 {
-  "name": "discord-shift-bot",
+  "name": "giveaway-bot",
   "version": "1.0.0",
+  "description": "Discord Giveaway Bot with custom embed, button, and auto-winner system.",
   "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "keywords": ["discord", "bot", "giveaway", "embed", "button", "auto"],
+  "author": "NTLKAFAN",
+  "license": "MIT",
   "dependencies": {
     "discord.js": "^14.11.0",
     "dotenv": "^16.3.1",
-    "node-cron": "^3.0.2"
-  },
-  "scripts": {
-    "start": "node index.js"
+    "ms": "^2.1.3"
   }
 }
