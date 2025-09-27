@@ -84,12 +84,20 @@ async function sendEmbedIfNotExist(channelId, type, data) {
   return msg;
 }
 
+// hide all channels except start channel
 async function hideAllChannels(guild, data) {
   for (const ch of guild.channels.cache.values()) {
-    for (const roleId of AFFECTED_ROLES) await setRoleViewPermission(ch, roleId, false);
+    for (const roleId of AFFECTED_ROLES) {
+      if (ch.id === START_CHANNEL_ID) {
+        await setRoleViewPermission(ch, roleId, true); // keep start channel visible
+      } else {
+        await setRoleViewPermission(ch, roleId, false);
+      }
+    }
   }
   data.shiftStarted = false;
   saveData(data);
+  console.log('🔒 Channels hidden except start channel.');
 }
 
 async function showAllChannels(guild, data) {
@@ -141,7 +149,7 @@ client.on('interactionCreate', async interaction => {
     data.lastActionAt = new Date().toISOString();
     saveData(data);
     await sendEmbedIfNotExist(START_CHANNEL_ID, 'start', data);
-    await interaction.reply({ content: '👋 You ended the shift — channels hidden.', ephemeral: true });
+    await interaction.reply({ content: '👋 You ended the shift — channels hidden except start channel.', ephemeral: true });
   } else {
     await interaction.reply({ content: '❓ Unknown button.', ephemeral: true });
   }
