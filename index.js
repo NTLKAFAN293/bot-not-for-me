@@ -1,4 +1,3 @@
-// index.js
 require('dotenv').config();
 const fs = require('fs');
 const path = require('path');
@@ -6,7 +5,7 @@ const { Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder
 const cron = require('node-cron');
 
 const TOKEN = process.env.TOKEN;
-if (!TOKEN) { console.error('❌ TOKEN not defined. Set TOKEN in .env or environment variables.'); process.exit(1); }
+if (!TOKEN) { console.error('❌ TOKEN not defined.'); process.exit(1); }
 
 const START_CHANNEL_ID = '1421293986315767920';
 const END_CHANNEL_ID   = '1421294259499434015';
@@ -61,7 +60,7 @@ async function sendEmbedIfNotExist(channelId, type, data) {
   const msgId = type==='start' ? data.startMessageId : data.endMessageId;
   let msg = null;
   if (msgId) msg = await ch.messages.fetch(msgId).catch(()=>null);
-  if (msg) return msg; // already exists
+  if (msg) return msg;
 
   const embed = new EmbedBuilder()
     .setTitle(type==='start' ? '⏰ Work Shift Started' : '📤 End Shift')
@@ -88,11 +87,8 @@ async function sendEmbedIfNotExist(channelId, type, data) {
 async function hideAllChannels(guild, data) {
   for (const ch of guild.channels.cache.values()) {
     for (const roleId of AFFECTED_ROLES) {
-      if (ch.id === START_CHANNEL_ID) {
-        await setRoleViewPermission(ch, roleId, true); // keep start channel visible
-      } else {
-        await setRoleViewPermission(ch, roleId, false);
-      }
+      if (ch.id === START_CHANNEL_ID) await setRoleViewPermission(ch, roleId, true);
+      else await setRoleViewPermission(ch, roleId, false);
     }
   }
   data.shiftStarted = false;
@@ -100,12 +96,14 @@ async function hideAllChannels(guild, data) {
   console.log('🔒 Channels hidden except start channel.');
 }
 
+// show all channels
 async function showAllChannels(guild, data) {
   for (const ch of guild.channels.cache.values()) {
     for (const roleId of AFFECTED_ROLES) await setRoleViewPermission(ch, roleId, true);
   }
   data.shiftStarted = true;
   saveData(data);
+  console.log('✅ Channels restored.');
 }
 
 client.once('ready', async () => {
@@ -138,23 +136,20 @@ client.on('interactionCreate', async interaction => {
 
   const data = loadData();
   try {
-    await interaction.deferReply({ ephemeral: true }); // defer to avoid Unknown Interaction
-    if (interaction.customId === 'start_shift') {
-      await showAllChannels(interaction.guild, data);
+    // الرد فورًا لتجنب Unknown interaction
+    await interaction.deferReply({ ephemeral: true });
+    interaction.editReply({ content: '🔧 Processing your request…' });
+
+    // تعديل الرومات في الخلفية
+    setImmediate(async () => {
+      if (interaction.customId === 'start_shift') await showAllChannels(interaction.guild, data);
+      else if (interaction.customId === 'end_shift') await hideAllChannels(interaction.guild, data);
       data.lastActionBy = member.user.id;
       data.lastActionAt = new Date().toISOString();
       saveData(data);
-      await interaction.editReply({ content: '✅ You have clocked in — channels restored.' });
-    } else if (interaction.customId === 'end_shift') {
-      await hideAllChannels(interaction.guild, data);
-      data.lastActionBy = member.user.id;
-      data.lastActionAt = new Date().toISOString();
-      saveData(data);
-      await sendEmbedIfNotExist(START_CHANNEL_ID, 'start', data);
-      await interaction.editReply({ content: '👋 You ended the shift — channels hidden except start channel.' });
-    } else {
-      await interaction.editReply({ content: '❓ Unknown button.' });
-    }
+      console.log(`Action ${interaction.customId} by ${member.user.tag}`);
+    });
+
   } catch (err) {
     console.error('❌ Error handling button interaction:', err);
   }
