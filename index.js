@@ -137,21 +137,26 @@ client.on('interactionCreate', async interaction => {
   if (!hasRole) return interaction.reply({ content: '⛔ You are not in the affected roles.', ephemeral: true });
 
   const data = loadData();
-  if (interaction.customId === 'start_shift') {
-    await showAllChannels(interaction.guild, data);
-    data.lastActionBy = member.user.id;
-    data.lastActionAt = new Date().toISOString();
-    saveData(data);
-    await interaction.reply({ content: '✅ You have clocked in — channels restored.', ephemeral: true });
-  } else if (interaction.customId === 'end_shift') {
-    await hideAllChannels(interaction.guild, data);
-    data.lastActionBy = member.user.id;
-    data.lastActionAt = new Date().toISOString();
-    saveData(data);
-    await sendEmbedIfNotExist(START_CHANNEL_ID, 'start', data);
-    await interaction.reply({ content: '👋 You ended the shift — channels hidden except start channel.', ephemeral: true });
-  } else {
-    await interaction.reply({ content: '❓ Unknown button.', ephemeral: true });
+  try {
+    await interaction.deferReply({ ephemeral: true }); // defer to avoid Unknown Interaction
+    if (interaction.customId === 'start_shift') {
+      await showAllChannels(interaction.guild, data);
+      data.lastActionBy = member.user.id;
+      data.lastActionAt = new Date().toISOString();
+      saveData(data);
+      await interaction.editReply({ content: '✅ You have clocked in — channels restored.' });
+    } else if (interaction.customId === 'end_shift') {
+      await hideAllChannels(interaction.guild, data);
+      data.lastActionBy = member.user.id;
+      data.lastActionAt = new Date().toISOString();
+      saveData(data);
+      await sendEmbedIfNotExist(START_CHANNEL_ID, 'start', data);
+      await interaction.editReply({ content: '👋 You ended the shift — channels hidden except start channel.' });
+    } else {
+      await interaction.editReply({ content: '❓ Unknown button.' });
+    }
+  } catch (err) {
+    console.error('❌ Error handling button interaction:', err);
   }
 });
 
