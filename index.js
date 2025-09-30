@@ -1,39 +1,73 @@
-import discord
-from discord.ext import commands
-from dotenv import load_dotenv
-import os
+const { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder } = require('discord.js');
+require('dotenv').config(); // لو حطيت التوكن في ملف .env
 
-# تحميل بيانات .env
-load_dotenv()
-TOKEN = os.getenv("DISCORD_TOKEN")
+const client = new Client({
+  intents: [
+    GatewayIntentBits.Guilds, 
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent
+  ]
+});
 
-intents = discord.Intents.default()
-intents.guilds = True
-intents.messages = True
-intents.message_content = True
-intents.guild_messages = True
+// ========= تعريف أوامر السلاش =========
+const commands = [
+  new SlashCommandBuilder()
+    .setName('ping')
+    .setDescription('يرد عليك بسرعة!'),
 
-bot = commands.Bot(command_prefix="+", intents=intents)
+  new SlashCommandBuilder()
+    .setName('say')
+    .setDescription('يخلي البوت يكرر كلامك')
+    .addStringOption(option =>
+      option.setName('message')
+        .setDescription('الرسالة')
+        .setRequired(true))
+].map(cmd => cmd.toJSON());
 
-@bot.event
-async def on_ready():
-    print(f"✅ تم تسجيل الدخول كبوت: {bot.user}")
+// ========= تسجيل أوامر السلاش =========
+client.once('ready', async () => {
+  console.log(`✅ Logged in as ${client.user.tag}`);
 
-@bot.command()
-async def حذف(ctx, *, category_name: str):
-    category = discord.utils.get(ctx.guild.categories, name=category_name)
-    if not category:
-        await ctx.send("❌ لم يتم العثور على كاتاجوري بهذا الاسم.")
-        return
-    
-    deleted = 0
-    for channel in category.channels:
-        try:
-            await channel.delete()
-            deleted += 1
-        except Exception as e:
-            await ctx.send(f"⚠️ لم استطع حذف {channel.name} - {e}")
-    
-    await ctx.send(f"✅ تم حذف {deleted} روم/رومات من الكاتاجوري `{category_name}`")
+  const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
+  try {
+    await rest.put(
+      Routes.applicationCommands(client.user.id),
+      { body: commands }
+    );
+    console.log("🚀 Slash commands registered!");
+  } catch (error) {
+    console.error(error);
+  }
+});
 
-bot.run(TOKEN)
+// ========= تنفيذ أوامر السلاش =========
+client.on('interactionCreate', async interaction => {
+  if (!interaction.isChatInputCommand()) return;
+
+  if (interaction.commandName === 'ping') {
+    await interaction.reply('🏓 Pong!');
+  }
+
+  if (interaction.commandName === 'say') {
+    const msg = interaction.options.getString('message');
+    await interaction.reply(msg);
+  }
+});
+
+// ========= أوامر كتابية =========
+client.on('messageCreate', async message => {
+  if (message.author.bot) return;
+
+  // مثال: لما يكتب "سيف"
+  if (message.content.includes("سيف")) {
+    message.reply(`عمك يا ${message.author}`);
+  }
+
+  // مثال: أمر كتابي !help
+  if (message.content === "!help") {
+    message.reply("الأوامر المتاحة: /ping, /say, !help");
+  }
+});
+
+// ========= تسجيل الدخول =========
+client.login(process.env.TOKEN);
