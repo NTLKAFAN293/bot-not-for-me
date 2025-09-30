@@ -1,0 +1,13 @@
+{
+  "name": "my-bot",
+  "version": "1.0.0",
+  "description": "Bot hosted on Render",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "discord.js": "^14.13.0"
+  }
+}
