@@ -1,73 +1,73 @@
-const { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder } = require('discord.js');
-require('dotenv').config(); // لو حطيت التوكن في ملف .env
+require("dotenv").config();
+const { Client, GatewayIntentBits, SlashCommandBuilder, Collection } = require("discord.js");
 
 const client = new Client({
-  intents: [
-    GatewayIntentBits.Guilds, 
-    GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent
-  ]
+  intents: [GatewayIntentBits.Guilds]
 });
 
-// ========= تعريف أوامر السلاش =========
-const commands = [
-  new SlashCommandBuilder()
-    .setName('ping')
-    .setDescription('يرد عليك بسرعة!'),
+// نخزن الأوامر هنا
+client.commands = new Collection();
 
-  new SlashCommandBuilder()
-    .setName('say')
-    .setDescription('يخلي البوت يكرر كلامك')
-    .addStringOption(option =>
-      option.setName('message')
-        .setDescription('الرسالة')
-        .setRequired(true))
-].map(cmd => cmd.toJSON());
+// تعريف أمر السلاش
+const copyPermsCommand = {
+  data: new SlashCommandBuilder()
+    .setName("نسخ-صلاحيات")
+    .setDescription("يــنــســخ صــلاحــيــات روم ويحــطــهــا فــي روم ثــانــي")
+    .addChannelOption(option =>
+      option.setName("من")
+        .setDescription("اخــتــار الــروم الــي تــبــي تــنــســخ مــنــه")
+        .setRequired(true)
+    )
+    .addChannelOption(option =>
+      option.setName("الى")
+        .setDescription("اخــتــار الــروم الــي تــبــي تــنــســخ فــيــه")
+        .setRequired(true)
+    ),
+  async execute(interaction) {
+    const fromChannel = interaction.options.getChannel("من");
+    const toChannel = interaction.options.getChannel("الى");
 
-// ========= تسجيل أوامر السلاش =========
-client.once('ready', async () => {
-  console.log(`✅ Logged in as ${client.user.tag}`);
+    if (!fromChannel || !toChannel) {
+      return interaction.reply("||لـــازم تــخــتــار روم صــح يــنــقــل مــعــك||");
+    }
 
-  const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
-  try {
-    await rest.put(
-      Routes.applicationCommands(client.user.id),
-      { body: commands }
-    );
-    console.log("🚀 Slash commands registered!");
-  } catch (error) {
-    console.error(error);
+    try {
+      await toChannel.permissionOverwrites.set(fromChannel.permissionOverwrites.cache);
+
+      await interaction.reply({
+        content: "```diff\n+ نــســخــت الــصــلاحــيــات مــن " + fromChannel.name + " الــى " + toChannel.name + " تــمــام\n```",
+        ephemeral: false
+      });
+
+    } catch (error) {
+      console.error(error);
+      await interaction.reply({
+        content: "> صــار خــطــا مــا قــدرت انــســخ",
+        ephemeral: true
+      });
+    }
   }
+};
+
+// نضيف الأمر لمجموعة الأوامر
+client.commands.set(copyPermsCommand.data.name, copyPermsCommand);
+
+client.once("ready", () => {
+  console.log("الــبــوت شــغــال تــمــام");
 });
 
-// ========= تنفيذ أوامر السلاش =========
-client.on('interactionCreate', async interaction => {
+client.on("interactionCreate", async interaction => {
   if (!interaction.isChatInputCommand()) return;
 
-  if (interaction.commandName === 'ping') {
-    await interaction.reply('🏓 Pong!');
-  }
+  const command = client.commands.get(interaction.commandName);
+  if (!command) return;
 
-  if (interaction.commandName === 'say') {
-    const msg = interaction.options.getString('message');
-    await interaction.reply(msg);
-  }
-});
-
-// ========= أوامر كتابية =========
-client.on('messageCreate', async message => {
-  if (message.author.bot) return;
-
-  // مثال: لما يكتب "سيف"
-  if (message.content.includes("سيف")) {
-    message.reply(`عمك يا ${message.author}`);
-  }
-
-  // مثال: أمر كتابي !help
-  if (message.content === "!help") {
-    message.reply("الأوامر المتاحة: /ping, /say, !help");
+  try {
+    await command.execute(interaction);
+  } catch (error) {
+    console.error(error);
+    await interaction.reply({ content: "صـــار خــطــا", ephemeral: true });
   }
 });
 
-// ========= تسجيل الدخول =========
 client.login(process.env.TOKEN);
