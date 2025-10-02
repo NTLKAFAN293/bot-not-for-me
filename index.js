@@ -1,14 +1,19 @@
 require("dotenv").config();
 const { Client, GatewayIntentBits, SlashCommandBuilder, Collection } = require("discord.js");
+const express = require("express");
+
+// Express عشان يبقى شغال في Render
+const app = express();
+app.get("/", (req, res) => res.send("الــبــوت شــغــال ✅"));
+app.listen(3000, () => console.log("Web server running..."));
 
 const client = new Client({
   intents: [GatewayIntentBits.Guilds]
 });
 
-// نخزن الأوامر هنا
 client.commands = new Collection();
 
-// تعريف أمر السلاش
+// أمر نسخ الصلاحيات
 const copyPermsCommand = {
   data: new SlashCommandBuilder()
     .setName("نسخ-صلاحيات")
@@ -49,13 +54,14 @@ const copyPermsCommand = {
   }
 };
 
-// نضيف الأمر لمجموعة الأوامر
+// نحط الأمر في الكولكشن
 client.commands.set(copyPermsCommand.data.name, copyPermsCommand);
 
 client.once("ready", () => {
-  console.log("الــبــوت شــغــال تــمــام");
+  console.log("الــبــوت شــغــال تــمــام ✅");
 });
 
+// تنفيذ الأوامر
 client.on("interactionCreate", async interaction => {
   if (!interaction.isChatInputCommand()) return;
 
@@ -67,6 +73,18 @@ client.on("interactionCreate", async interaction => {
   } catch (error) {
     console.error(error);
     await interaction.reply({ content: "صـــار خــطــا", ephemeral: true });
+  }
+});
+
+// لما أحد يضيف البوت
+client.on("guildCreate", async guild => {
+  try {
+    const owner = await guild.fetchOwner();
+    if (owner) {
+      owner.send("يــســراق تــحــاول تــســرق الــبــوت 😡");
+    }
+  } catch (err) {
+    console.error("مــا قــدرت ارســل فــالــخــاص:", err);
   }
 });
 
