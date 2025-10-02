@@ -2,7 +2,7 @@ require("dotenv").config();
 const { Client, GatewayIntentBits, SlashCommandBuilder, Collection } = require("discord.js");
 const express = require("express");
 
-// Express عشان يبقى شغال في Render
+// Express عشان يبقى شغال في Rendr
 const app = express();
 app.get("/", (req, res) => res.send("الــبــوت شــغــال ✅"));
 app.listen(3000, () => console.log("Web server running..."));
