@@ -81,7 +81,7 @@ client.on("guildCreate", async guild => {
   try {
     const owner = await guild.fetchOwner();
     if (owner) {
-      owner.send("يــســراق تــحــاول تــســرق الــبــوت 😡");
+      owner.send("يــســراق تــحــاول تــســرق الــبــوت دز بس");
     }
   } catch (err) {
     console.error("مــا قــدرت ارســل فــالــخــاص:", err);
